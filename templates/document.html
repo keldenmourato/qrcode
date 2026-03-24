@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ document.original_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <main class="document-page">
+      <header class="document-header">
+        <div>
+          <p class="eyebrow">Documento</p>
+          <h1>{{ document.original_name }}</h1>
+          <p>{{ document.mime_type }}</p>
+        </div>
+        <a href="{{ url_for('get_file', document_id=document.id) }}">Abrir ficheiro</a>
+      </header>
+
+      <section class="viewer-card">
+        {% if document.category == "pdf" %}
+          <iframe src="{{ url_for('get_file', document_id=document.id) }}" title="{{ document.original_name }}"></iframe>
+        {% elif document.category == "image" %}
+          <img src="{{ url_for('get_file', document_id=document.id) }}" alt="{{ document.original_name }}" class="doc-image">
+        {% elif document.category == "text" %}
+          <pre class="text-preview">{{ text_content }}</pre>
+        {% else %}
+          <div class="fallback">
+            <p>Este tipo de ficheiro nao pode ser apresentado diretamente nesta pagina.</p>
+            <p>Use o botao acima para abrir o documento a partir da propria aplicacao.</p>
+          </div>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>

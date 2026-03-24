@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gerador de QR Code para Documentos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Python + Render + Supabase Storage</p>
+          <h1>Transforme um documento num QR code que abre na sua propria app.</h1>
+          <p class="lead">
+            O utilizador faz o scan e abre o documento servido pela sua propria aplicacao, enquanto os ficheiros ficam guardados em storage persistente.
+          </p>
+          <p class="hint">
+            Endereco publico atual:
+            <strong>{{ server_origin }}</strong>
+          </p>
+        </div>
+
+        <form class="upload-card" method="post" enctype="multipart/form-data">
+          <label for="document" class="label">Escolha o documento</label>
+          <input id="document" name="document" type="file" required {% if missing_config %}disabled{% endif %}>
+          <button type="submit" {% if missing_config %}disabled{% endif %}>Gerar QR Code</button>
+          {% if error %}
+            <p class="error">{{ error }}</p>
+          {% endif %}
+          {% if missing_config %}
+            <div class="setup-box">
+              <p class="setup-title">Configuracao em falta</p>
+              <p>Defina estas variaveis de ambiente antes de fazer upload:</p>
+              <ul class="setup-list">
+                {% for item in missing_config %}
+                  <li>{{ item }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+        </form>
+      </section>
+
+      {% if latest_document %}
+        <section class="result-card">
+          <div>
+            <p class="eyebrow">Novo QR Code</p>
+            <h2>{{ latest_document.original_name }}</h2>
+            <p class="mono">{{ latest_document.access_url }}</p>
+            <div class="actions">
+              <a href="{{ url_for('view_document', document_id=latest_document.id) }}">Abrir documento</a>
+              <a href="{{ url_for('get_qr_code', document_id=latest_document.id) }}" target="_blank" rel="noreferrer">Abrir imagem do QR</a>
+            </div>
+          </div>
+          <img src="{{ url_for('get_qr_code', document_id=latest_document.id) }}" alt="QR code do documento">
+        </section>
+      {% endif %}
+
+      <section class="list-card">
+        <div class="section-header">
+          <p class="eyebrow">Historico</p>
+          <h2>Documentos gerados</h2>
+        </div>
+
+        {% if documents %}
+          <div class="document-list">
+            {% for document in documents %}
+              <article class="document-item">
+                <div>
+                  <h3>{{ document.original_name }}</h3>
+                  <p>{{ document.mime_type }}</p>
+                </div>
+                <div class="actions">
+                  <a href="{{ url_for('view_document', document_id=document.id) }}">Ver</a>
+                  <a href="{{ url_for('get_qr_code', document_id=document.id) }}" target="_blank" rel="noreferrer">QR</a>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="empty">Ainda nao existem documentos. Carregue um ficheiro para criar o primeiro QR code.</p>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>
