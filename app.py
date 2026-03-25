@@ -8,6 +8,7 @@ from io import BytesIO
 
 import qrcode
 from flask import Flask, abort, redirect, render_template, request, send_file, url_for
+from qrcode.image.pure import PyPNGImage
 from supabase import Client, create_client
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
@@ -84,6 +85,8 @@ def build_access_url(document_id: str) -> str:
 
 
 def guess_category(mime_type: str) -> str:
+    if not mime_type:
+        return "binary"
     if mime_type == "application/pdf":
         return "pdf"
     if mime_type.startswith("image/"):
@@ -165,7 +168,7 @@ def download_document_bytes(document: dict[str, str]) -> bytes:
 
 
 def build_qr_code_bytes(content: str) -> BytesIO:
-    qr_image = qrcode.make(content)
+    qr_image = qrcode.make(content, image_factory=PyPNGImage)
     buffer = BytesIO()
     qr_image.save(buffer, format="PNG")
     buffer.seek(0)
@@ -227,6 +230,7 @@ def view_document(document_id: str):
     try:
         document = get_document(document_id)
     except Exception:
+        app.logger.exception("Erro ao carregar metadados do documento %s", document_id)
         abort(500)
 
     if not document:
@@ -237,6 +241,7 @@ def view_document(document_id: str):
         try:
             text_content = download_document_bytes(document).decode("utf-8", errors="replace")
         except Exception:
+            app.logger.exception("Erro ao descarregar texto do documento %s", document_id)
             abort(500)
 
     return render_template("document.html", document=document, text_content=text_content)
@@ -247,6 +252,7 @@ def get_file(document_id: str):
     try:
         document = get_document(document_id)
     except Exception:
+        app.logger.exception("Erro ao carregar metadados para o ficheiro %s", document_id)
         abort(500)
 
     if not document:
@@ -255,6 +261,7 @@ def get_file(document_id: str):
     try:
         content = download_document_bytes(document)
     except Exception:
+        app.logger.exception("Erro ao descarregar ficheiro do Supabase %s", document_id)
         abort(500)
 
     return send_file(
@@ -270,12 +277,19 @@ def get_qr_code(document_id: str):
     try:
         document = get_document(document_id)
     except Exception:
+        app.logger.exception("Erro ao carregar documento para gerar QR %s", document_id)
         abort(500)
 
     if not document:
         abort(404)
 
-    return send_file(build_qr_code_bytes(document["access_url"]), mimetype="image/png", as_attachment=False)
+    try:
+        qr_bytes = build_qr_code_bytes(document["access_url"])
+    except Exception:
+        app.logger.exception("Erro ao gerar imagem QR para %s com URL %s", document_id, document.get("access_url"))
+        abort(500)
+
+    return send_file(qr_bytes, mimetype="image/png", as_attachment=False)
 
 
 @app.route("/latest")
@@ -283,6 +297,7 @@ def latest_document():
     try:
         documents = list_documents(limit=1)
     except Exception:
+        app.logger.exception("Erro ao carregar o documento mais recente")
         abort(500)
 
     if not documents:
