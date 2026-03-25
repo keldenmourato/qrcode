@@ -4,11 +4,13 @@ import mimetypes
 import os
 import socket
 import uuid
+from functools import wraps
 from io import BytesIO
 
 import qrcode
-from flask import Flask, abort, redirect, render_template, request, send_file, url_for
-from qrcode.image.pure import PyPNGImage
+from flask import Flask, Response, abort, redirect, render_template, request, send_file, url_for
+from PIL import Image
+from qrcode.image.pil import PilImage
 from supabase import Client, create_client
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
@@ -62,6 +64,40 @@ def get_bucket_name() -> str:
     return os.environ["SUPABASE_BUCKET"]
 
 
+def get_admin_username() -> str | None:
+    return os.environ.get("ADMIN_USERNAME")
+
+
+def get_admin_password() -> str | None:
+    return os.environ.get("ADMIN_PASSWORD")
+
+
+def has_admin_credentials() -> bool:
+    return bool(get_admin_username() and get_admin_password())
+
+
+def check_admin_auth(username: str | None, password: str | None) -> bool:
+    return username == get_admin_username() and password == get_admin_password()
+
+
+def admin_auth_required(view):
+    @wraps(view)
+    def wrapped_view(*args, **kwargs):
+        if not has_admin_credentials():
+            abort(404)
+
+        auth = request.authorization
+        if not auth or not check_admin_auth(auth.username, auth.password):
+            return Response(
+                "Autenticacao necessaria.",
+                401,
+                {"WWW-Authenticate": 'Basic realm="Historico Privado"'},
+            )
+        return view(*args, **kwargs)
+
+    return wrapped_view
+
+
 def get_public_origin() -> str:
     base_url = os.environ.get("APP_BASE_URL")
     if base_url:
@@ -101,6 +137,7 @@ def enrich_document(document: dict[str, str]) -> dict[str, str]:
     mime_type = enriched.get("mime_type", "application/octet-stream")
     enriched["category"] = guess_category(mime_type)
     enriched["access_url"] = build_access_url(enriched["id"])
+    enriched["has_logo"] = bool(enriched.get("logo_path"))
     return enriched
 
 
@@ -132,9 +169,18 @@ def get_document(document_id: str) -> dict[str, str] | None:
     return enrich_document(rows[0])
 
 
-def upload_document_to_supabase(document_id: str, original_name: str, mime_type: str, file_bytes: bytes) -> dict[str, str]:
+def upload_document_to_supabase(
+    document_id: str,
+    original_name: str,
+    mime_type: str,
+    file_bytes: bytes,
+    logo_bytes: bytes | None = None,
+    logo_name: str | None = None,
+    logo_mime_type: str | None = None,
+) -> dict[str, str]:
     extension = os.path.splitext(original_name)[1]
     storage_path = f"documents/{document_id}{extension}"
+    logo_path = None
 
     supabase = get_supabase()
     storage = supabase.storage.from_(get_bucket_name())
@@ -148,16 +194,32 @@ def upload_document_to_supabase(document_id: str, original_name: str, mime_type:
         },
     )
 
+    if logo_bytes and logo_name:
+        logo_extension = os.path.splitext(logo_name)[1] or ".png"
+        logo_path = f"logos/{document_id}{logo_extension}"
+        storage.upload(
+            path=logo_path,
+            file=logo_bytes,
+            file_options={
+                "content-type": logo_mime_type or "image/png",
+                "upsert": "false",
+            },
+        )
+
     metadata = {
         "id": document_id,
         "original_name": original_name,
         "storage_path": storage_path,
         "mime_type": mime_type,
+        "logo_path": logo_path,
     }
     try:
         supabase.table("documents").insert(metadata).execute()
     except Exception:
-        storage.remove([storage_path])
+        cleanup_paths = [storage_path]
+        if logo_path:
+            cleanup_paths.append(logo_path)
+        storage.remove(cleanup_paths)
         raise
     return enrich_document(metadata)
 
@@ -167,10 +229,48 @@ def download_document_bytes(document: dict[str, str]) -> bytes:
     return get_supabase().storage.from_(get_bucket_name()).download(storage_path)
 
 
-def build_qr_code_bytes(content: str) -> BytesIO:
-    qr_image = qrcode.make(content, image_factory=PyPNGImage)
+def download_logo_bytes(document: dict[str, str]) -> bytes | None:
+    logo_path = document.get("logo_path")
+    if not logo_path:
+        return None
+    return get_supabase().storage.from_(get_bucket_name()).download(logo_path)
+
+
+def build_qr_code_bytes(content: str, logo_bytes: bytes | None = None) -> BytesIO:
+    qr_image = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=4,
+    )
+    qr_image.add_data(content)
+    qr_image.make(fit=True)
+    qr_image = qr_image.make_image(fill_color="black", back_color="white", image_factory=PilImage).get_image()
+
+    if logo_bytes:
+        logo = Image.open(BytesIO(logo_bytes)).convert("RGBA")
+        qr_image = qr_image.convert("RGBA")
+
+        qr_width, qr_height = qr_image.size
+        logo_limit = min(qr_width, qr_height) // 4
+        logo.thumbnail((logo_limit, logo_limit))
+
+        background_size = (logo.width + 20, logo.height + 20)
+        logo_background = Image.new("RGBA", background_size, (255, 255, 255, 255))
+        bg_position = (
+            (qr_width - logo_background.width) // 2,
+            (qr_height - logo_background.height) // 2,
+        )
+        qr_image.alpha_composite(logo_background, dest=bg_position)
+
+        logo_position = (
+            (qr_width - logo.width) // 2,
+            (qr_height - logo.height) // 2,
+        )
+        qr_image.alpha_composite(logo, dest=logo_position)
+
     buffer = BytesIO()
-    qr_image.save(buffer)
+    qr_image.save(buffer, format="PNG")
     buffer.seek(0)
     return buffer
 
@@ -181,18 +281,12 @@ def index():
     latest_document = None
     error = None
 
-    try:
-        documents = list_documents()
-    except Exception as exc:
-        documents = []
-        if not missing_config:
-            error = f"Nao foi possivel carregar os documentos: {exc}"
-
     if request.method == "POST":
         if missing_config:
             error = "Configure primeiro as variaveis do Supabase antes de enviar documentos."
         else:
             uploaded_file = request.files.get("document")
+            uploaded_logo = request.files.get("logo")
             if not uploaded_file or not uploaded_file.filename:
                 error = "Selecione um documento antes de gerar o QR code."
             else:
@@ -203,26 +297,51 @@ def index():
                     mime_type = uploaded_file.mimetype or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
                     file_bytes = uploaded_file.read()
                     document_id = str(uuid.uuid4())
+                    logo_bytes = None
+                    logo_name = None
+                    logo_mime_type = None
 
-                    try:
-                        latest_document = upload_document_to_supabase(
-                            document_id=document_id,
-                            original_name=original_name,
-                            mime_type=mime_type,
-                            file_bytes=file_bytes,
-                        )
-                        documents = list_documents()
-                    except Exception as exc:
-                        error = f"Nao foi possivel enviar o documento para o Supabase: {exc}"
+                    if uploaded_logo and uploaded_logo.filename:
+                        logo_name = secure_filename(uploaded_logo.filename)
+                        logo_mime_type = uploaded_logo.mimetype or mimetypes.guess_type(logo_name)[0] or "image/png"
+                        if not logo_mime_type.startswith("image/"):
+                            error = "O logotipo precisa de ser uma imagem."
+                        else:
+                            logo_bytes = uploaded_logo.read()
+
+                    if not error:
+                        try:
+                            latest_document = upload_document_to_supabase(
+                                document_id=document_id,
+                                original_name=original_name,
+                                mime_type=mime_type,
+                                file_bytes=file_bytes,
+                                logo_bytes=logo_bytes,
+                                logo_name=logo_name,
+                                logo_mime_type=logo_mime_type,
+                            )
+                        except Exception as exc:
+                            error = f"Nao foi possivel enviar o documento para o Supabase: {exc}"
 
     return render_template(
         "index.html",
         latest_document=latest_document,
-        documents=documents,
         server_origin=get_public_origin(),
         missing_config=missing_config,
+        has_admin_credentials=has_admin_credentials(),
         error=error,
     )
+
+
+@app.route("/admin")
+@admin_auth_required
+def admin_history():
+    try:
+        documents = list_documents()
+    except Exception as exc:
+        return render_template("admin.html", documents=[], error=f"Nao foi possivel carregar o historico: {exc}")
+
+    return render_template("admin.html", documents=documents, error=None)
 
 
 @app.route("/document/<document_id>")
@@ -284,12 +403,18 @@ def get_qr_code(document_id: str):
         abort(404)
 
     try:
-        qr_bytes = build_qr_code_bytes(document["access_url"])
+        qr_bytes = build_qr_code_bytes(document["access_url"], download_logo_bytes(document))
     except Exception:
         app.logger.exception("Erro ao gerar imagem QR para %s com URL %s", document_id, document.get("access_url"))
         abort(500)
 
-    return send_file(qr_bytes, mimetype="image/png", as_attachment=False)
+    download = request.args.get("download") == "1"
+    return send_file(
+        qr_bytes,
+        mimetype="image/png",
+        as_attachment=download,
+        download_name=f"qr-{document_id}.png",
+    )
 
 
 @app.route("/latest")

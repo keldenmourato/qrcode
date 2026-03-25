@@ -90,7 +90,8 @@ h1 {
 .document-item p,
 .document-header p,
 .setup-box p,
-.setup-list {
+.setup-list,
+.field-hint {
   color: var(--muted);
 }
 
@@ -98,11 +99,15 @@ h1 {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .label {
   font-weight: bold;
+}
+
+.field-hint {
+  font-size: 0.92rem;
 }
 
 input[type="file"] {
@@ -144,6 +149,11 @@ input:disabled {
 .document-header a {
   background: #efe2cf;
   color: var(--accent-dark);
+}
+
+.actions a:nth-child(3) {
+  background: #264653;
+  color: #f8f5ef;
 }
 
 .result-card {

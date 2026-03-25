@@ -14,7 +14,10 @@
           <h1>{{ document.original_name }}</h1>
           <p>{{ document.mime_type }}</p>
         </div>
-        <a href="{{ url_for('get_file', document_id=document.id) }}">Abrir ficheiro</a>
+        <div class="actions">
+          <a href="{{ url_for('get_file', document_id=document.id) }}">Abrir ficheiro</a>
+          <a href="{{ url_for('get_qr_code', document_id=document.id, download=1) }}">Baixar QR</a>
+        </div>
       </header>
 
       <section class="viewer-card">

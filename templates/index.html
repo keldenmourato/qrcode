@@ -10,20 +10,28 @@
     <main class="page">
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Python + Render + Supabase Storage</p>
+          <p class="eyebrow">Mourato qrcode generator</p>
           <h1>Transforme um documento num QR code que abre na sua propria app.</h1>
           <p class="lead">
-            O utilizador faz o scan e abre o documento servido pela sua propria aplicacao, enquanto os ficheiros ficam guardados em storage persistente.
+            Pode gerar um QR simples ou adicionar um logotipo no centro para reforcar a identidade visual.
           </p>
           <p class="hint">
             Endereco publico atual:
             <strong>{{ server_origin }}</strong>
           </p>
+          {% if has_admin_credentials %}
+            <p class="hint">O historico completo ficou numa area privada protegida por autenticacao.</p>
+          {% endif %}
         </div>
 
         <form class="upload-card" method="post" enctype="multipart/form-data">
           <label for="document" class="label">Escolha o documento</label>
           <input id="document" name="document" type="file" required {% if missing_config %}disabled{% endif %}>
+
+          <label for="logo" class="label">Logotipo opcional</label>
+          <input id="logo" name="logo" type="file" accept="image/*" {% if missing_config %}disabled{% endif %}>
+          <p class="field-hint">Se enviar um logotipo, ele sera colocado no centro do QR code. Se nao enviar, o QR sera simples.</p>
+
           <button type="submit" {% if missing_config %}disabled{% endif %}>Gerar QR Code</button>
           {% if error %}
             <p class="error">{{ error }}</p>
@@ -48,40 +56,16 @@
             <p class="eyebrow">Novo QR Code</p>
             <h2>{{ latest_document.original_name }}</h2>
             <p class="mono">{{ latest_document.access_url }}</p>
+            <p class="hint">{% if latest_document.has_logo %}QR gerado com logotipo central.{% else %}QR gerado no modo simples.{% endif %}</p>
             <div class="actions">
               <a href="{{ url_for('view_document', document_id=latest_document.id) }}">Abrir documento</a>
-              <a href="{{ url_for('get_qr_code', document_id=latest_document.id) }}" target="_blank" rel="noreferrer">Abrir imagem do QR</a>
+              <a href="{{ url_for('get_qr_code', document_id=latest_document.id) }}" target="_blank" rel="noreferrer">Abrir QR</a>
+              <a href="{{ url_for('get_qr_code', document_id=latest_document.id, download=1) }}">Baixar QR</a>
             </div>
           </div>
           <img src="{{ url_for('get_qr_code', document_id=latest_document.id) }}" alt="QR code do documento">
         </section>
       {% endif %}
-
-      <section class="list-card">
-        <div class="section-header">
-          <p class="eyebrow">Historico</p>
-          <h2>Documentos gerados</h2>
-        </div>
-
-        {% if documents %}
-          <div class="document-list">
-            {% for document in documents %}
-              <article class="document-item">
-                <div>
-                  <h3>{{ document.original_name }}</h3>
-                  <p>{{ document.mime_type }}</p>
-                </div>
-                <div class="actions">
-                  <a href="{{ url_for('view_document', document_id=document.id) }}">Ver</a>
-                  <a href="{{ url_for('get_qr_code', document_id=document.id) }}" target="_blank" rel="noreferrer">QR</a>
-                </div>
-              </article>
-            {% endfor %}
-          </div>
-        {% else %}
-          <p class="empty">Ainda nao existem documentos. Carregue um ficheiro para criar o primeiro QR code.</p>
-        {% endif %}
-      </section>
     </main>
   </body>
 </html>

@@ -5,18 +5,18 @@ Projeto em Python que permite carregar um documento, gerar um QR code e abrir es
 ## Arquitetura
 
 - `Render` hospeda a app Flask
-- `Supabase Storage` guarda os ficheiros enviados
+- `Supabase Storage` guarda os ficheiros enviados e o logotipo opcional
 - `Supabase Postgres` guarda os metadados dos documentos
 - O QR code aponta para a rota da tua app, e nao para um site de terceiros
+- O historico completo fica numa area privada protegida por autenticacao basica
 
-## Como funciona
+## Funcionalidades
 
-1. O utilizador abre a app.
-2. Faz upload de um documento.
-3. A app envia o ficheiro para um bucket privado no Supabase.
-4. A app grava os metadados na tabela `documents`.
-5. A app gera um QR code com o URL publico da propria aplicacao.
-6. Ao fazer scan, o documento abre pela rota `/document/<id>` da tua app.
+- Upload de documento
+- QR code simples
+- QR code com logotipo central opcional
+- Download do QR code em PNG
+- Historico privado em `/admin`
 
 ## Requisitos
 
@@ -39,6 +39,8 @@ $env:APP_BASE_URL='http://127.0.0.1:5000'
 $env:SUPABASE_URL='https://SEU-PROJETO.supabase.co'
 $env:SUPABASE_SERVICE_ROLE_KEY='SUA_SERVICE_ROLE_KEY'
 $env:SUPABASE_BUCKET='documents'
+$env:ADMIN_USERNAME='seu-utilizador'
+$env:ADMIN_PASSWORD='sua-password-forte'
 ```
 
 ## Executar localmente
@@ -67,7 +69,7 @@ http://127.0.0.1:5000
 2. Cria um bucket chamado `documents`.
 3. Marca o bucket como `Private`.
 
-### 3. Criar a tabela
+### 3. Criar ou atualizar a tabela
 
 No `SQL Editor`, executa o conteudo de [supabase_setup.sql](d:/kldn/Project/QR-Code/supabase_setup.sql).
 
@@ -106,27 +108,23 @@ APP_BASE_URL=https://nome-da-tua-app.onrender.com
 SUPABASE_URL=https://SEU-PROJETO.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=SUA_SERVICE_ROLE_KEY
 SUPABASE_BUCKET=documents
+ADMIN_USERNAME=seu-utilizador
+ADMIN_PASSWORD=sua-password-forte
 ```
 
 ### 5. Fazer deploy
 
 1. Guarda as configuracoes.
-2. Espera o primeiro deploy terminar.
+2. Espera o deploy terminar.
 3. Abre a app no URL `onrender.com`.
-4. Faz upload de um documento e testa o QR code.
+4. Faz upload de um documento.
+5. Testa o QR code.
+6. Acede a `https://nome-da-tua-app.onrender.com/admin` para ver o historico privado.
 
-## Ficheiros importantes
+## Notas importantes
 
-- [app.py](d:/kldn/Project/QR-Code/app.py): app Flask
-- [templates/index.html](d:/kldn/Project/QR-Code/templates/index.html): pagina principal
-- [templates/document.html](d:/kldn/Project/QR-Code/templates/document.html): visualizacao do documento
-- [render.yaml](d:/kldn/Project/QR-Code/render.yaml): configuracao do Render
-- [supabase_setup.sql](d:/kldn/Project/QR-Code/supabase_setup.sql): tabela `documents`
-- [.env.example](d:/kldn/Project/QR-Code/.env.example): exemplo de variaveis de ambiente
-
-## Observacoes
-
+- A pagina inicial deixou de mostrar o historico publicamente.
+- A area `/admin` pede autenticacao HTTP Basic.
 - O bucket deve ser privado.
 - A `service_role key` deve ficar apenas no backend e nunca no frontend.
-- O Render gratuito pode entrar em idle depois de algum tempo sem trafego.
-- O primeiro acesso apos idle pode demorar um pouco.
+- O logotipo opcional deve ser uma imagem.
