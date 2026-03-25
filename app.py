@@ -170,7 +170,7 @@ def download_document_bytes(document: dict[str, str]) -> bytes:
 def build_qr_code_bytes(content: str) -> BytesIO:
     qr_image = qrcode.make(content, image_factory=PyPNGImage)
     buffer = BytesIO()
-    qr_image.save(buffer, format="PNG")
+    qr_image.save(buffer)
     buffer.seek(0)
     return buffer
 
