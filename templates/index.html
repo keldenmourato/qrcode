@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gerador de QR Code para Documentos</title>
+    <title>Gerador de QR Code para ficheiros</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   </head>
   <body>
@@ -11,7 +11,7 @@
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">Mourato qrcode generator</p>
-          <h1>Transforme um documento num QR code que abre na sua propria app.</h1>
+          <h1>Transforme um ficheiro num QR code que abre na sua propria app.</h1>
           <p class="lead">
             Pode gerar um QR simples ou adicionar um logotipo no centro para reforcar a identidade visual.
           </p>
@@ -25,7 +25,7 @@
         </div>
 
         <form class="upload-card" method="post" enctype="multipart/form-data">
-          <label for="document" class="label">Escolha o documento</label>
+          <label for="document" class="label">Escolha o ficheiro</label>
           <input id="document" name="document" type="file" required {% if missing_config %}disabled{% endif %}>
 
           <label for="logo" class="label">Logotipo opcional</label>
