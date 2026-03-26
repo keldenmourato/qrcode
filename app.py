@@ -383,10 +383,11 @@ def get_file(document_id: str):
         app.logger.exception("Erro ao descarregar ficheiro do Supabase %s", document_id)
         abort(500)
 
+    download = request.args.get("download") == "1"
     return send_file(
         BytesIO(content),
         mimetype=document["mime_type"],
-        as_attachment=False,
+        as_attachment=download,
         download_name=document["original_name"],
     )
 

@@ -59,6 +59,7 @@
             <p class="hint">{% if latest_document.has_logo %}QR gerado com logotipo central.{% else %}QR gerado no modo simples.{% endif %}</p>
             <div class="actions">
               <a href="{{ url_for('view_document', document_id=latest_document.id) }}">Abrir documento</a>
+              <a href="{{ url_for('get_file', document_id=latest_document.id, download=1) }}">Baixar documento</a>
               <a href="{{ url_for('get_qr_code', document_id=latest_document.id) }}" target="_blank" rel="noreferrer">Abrir QR</a>
               <a href="{{ url_for('get_qr_code', document_id=latest_document.id, download=1) }}">Baixar QR</a>
             </div>
